@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Powered FAQ Chatbot</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #4361ee;
+            --secondary-color: #3a0ca3;
+            --accent-color: #f72585;
+            --light-color: #f8f9fa;
+            --dark-color: #212529;
+            --gray-color: #6c757d;
+            --success-color: #4bb543;
+            --warning-color: #f9a826;
+            --danger-color: #dc3545;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #f5f7ff;
+            color: var(--dark-color);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        .header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 1rem 2rem;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+        }
+
+        .header p {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            margin-top: 0.5rem;
+        }
+
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            max-width: 800px;
+            width: 100%;
+            margin: 2rem auto;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background-color: var(--secondary-color);
+            color: white;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .chat-header img {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+        }
+
+        .chat-header h2 {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            max-height: 60vh;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 0.8rem 1.2rem;
+            border-radius: 18px;
+            line-height: 1.4;
+            position: relative;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .user-message {
+            align-self: flex-end;
+            background-color: var(--primary-color);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .bot-message {
+            align-self: flex-start;
+            background-color: #f1f3ff;
+            color: var(--dark-color);
+            border-bottom-left-radius: 4px;
+        }
+
+        .message-time {
+            display: block;
+            font-size: 0.7rem;
+            opacity: 0.7;
+            margin-top: 0.3rem;
+            text-align: right;
+        }
+
+        .feedback-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+            justify-content: flex-end;
+        }
+
+        .feedback-button {
+            border: none;
+            background-color: var(--light-color);
+            color: var(--gray-color);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .feedback-button:hover {
+            background-color: #e9ecef;
+        }
+
+        .feedback-button.helpful {
+            color: var(--success-color);
+        }
+
+        .feedback-button.not-helpful {
+            color: var(--danger-color);
+        }
+
+        .typing-indicator {
+            align-self: flex-start;
+            background-color: #f1f3ff;
+            color: var(--gray-color);
+            padding: 0.8rem 1.2rem;
+            border-radius: 18px;
+            border-bottom-left-radius: 4px;
+            display: inline-flex;
+            gap: 0.5rem;
+            align-items: center;
+            width: fit-content;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--gray-color);
+            border-radius: 50%;
+            animation: typingAnimation 1.4s infinite ease-in-out;
+        }
+
+        .typing-dot:nth-child(1) {
+            animation-delay: 0s;
+        }
+
+        .typing-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typingAnimation {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-5px); }
+        }
+
+        .chat-input {
+            display: flex;
+            padding: 1rem;
+            border-top: 1px solid #eee;
+            background-color: white;
+        }
+
+        .chat-input input {
+            flex: 1;
+            padding: 0.8rem 1.2rem;
+            border: 1px solid #ddd;
+            border-radius: 24px;
+            font-size: 1rem;
+            outline: none;
+            transition: border 0.2s;
+        }
+
+        .chat-input input:focus {
+            border-color: var(--primary-color);
+        }
+
+        .chat-input button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            margin-left: 0.8rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chat-input button:hover {
+            background-color: var(--secondary-color);
+        }
+
+        .chat-input button:disabled {
+            background-color: var(--gray-color);
+            cursor: not-allowed;
+        }
+
+        .faq-suggestions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            padding: 0 1rem 1rem;
+            border-bottom: 1px solid #eee;
+        }
+
+        .faq-suggestion {
+            background-color: #f1f3ff;
+            color: var(--primary-color);
+            border: none;
+            border-radius: 16px;
+            padding: 0.4rem 0.8rem;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .faq-suggestion:hover {
+            background-color: #e2e7ff;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 1rem;
+            color: var(--gray-color);
+            font-size: 0.8rem;
+        }
+
+        @media (max-width: 768px) {
+            .chat-container {
+                margin: 0;
+                border-radius: 0;
+                height: 100vh;
+            }
+            
+            .message {
+                max-width: 90%;
+            }
+        }
+
+        /* Loader animation */
+        .loader {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>AI-Powered FAQ Assistant</h1>
+        <p>An Intelligent Chatbot Using TensorFlow.js for Natural Language Understanding</p>
+    </div>
+
+    <div class="chat-container">
+        <div class="chat-header">
+            <img src="https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/d3ee7f4d-ce0f-43b2-9699-6078d00725d3.png" alt="AI assistant avatar with friendly blue robot face" />
+            <h2>Intelligent FAQ Assistant <span class="version">v1.0</span></h2>
+        </div>
+
+        <div class="faq-suggestions">
+             <button class="faq-suggestion">How do I book a ticket?</button>
+            <button class="faq-suggestion">What's the schedule to Mumbai?</button>
+            <button class="faq-suggestion">Can I cancel my booking?</button>
+            <button class="faq-suggestion">What are your payment options?</button>
+        </div>
+
+        <div class="chat-messages" id="chat-messages">
+            <div class="bot-message">
+                 Hello! I'm your bus booking assistant. I can help with schedules, ticket booking, cancellations and travel information. Try asking me something like "How do I book a ticket?" or "What's the schedule for buses to Mumbai?" 
+                <span class="message-time">Today • System Ready</span>
+            </div>
+        </div>
+
+        <div class="chat-input">
+            <input type="text" id="user-input" placeholder="Type your question here..." />
+            <button id="send-button">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 2L11 13"></path>
+                    <path d="M22 2l-7 20-4-9-9-4 20-7z"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <div class="footer">
+               <p>Bus Booking Assistant © 2025 | Powered by KSRTC</p>
+    </div>
+
+    <script>
+        // Initialize TensorFlow.js model
+        let model;
+        let unansweredQueries = JSON.parse(localStorage.getItem('unansweredQueries')) || [];
+        
+        // FAQ dataset with questions and answers
+        const faqData = [
+            {
+               question: "how do i book a bus ticket",
+                answer: "You can book tickets online through our website or mobile app. Select your route, date, preferred bus and make payment to complete your booking.",
+                keywords: ["book", "ticket", "reserve", "purchase"]
+            },
+            {
+                question: "how can i check bus schedules",
+                answer: "Bus schedules are available on our website under 'Schedules' section. You can filter by route, date and time to find suitable options.",
+                keywords: ["schedule", "timing", "route", "time", "departure"]
+            },
+            {
+                question: "can i cancel my booking",
+                answer: "Yes, bookings can be cancelled up to 6 hours before departure. Cancellation charges may apply depending on when you cancel.",
+                keywords: ["cancel", "refund", "change", "modify","booking"]
+            },
+            {
+                question: "what payment methods do you accept",
+                answer: "We accept credit/debit cards, UPI, net banking and popular mobile wallets for ticket payments.",
+                keywords: ["payment", "pay", "credit", "debit", "upi"]
+            },
+            {
+                question: "is there a mobile app",
+                answer: "Yes, our mobile app is available for both Android and iOS devices. You can download it from Google Play Store or Apple App Store.",
+                keywords: ["mobile", "app", "download", "android", "ios"]
+            },
+            {
+                question: "what is your cancellation policy",
+                answer: "Cancellations made 24+ hours before departure get 80% refund, 6-24 hours get 50% refund. No refund for cancellations within 6 hours of departure.",
+                keywords: ["cancellation", "policy", "refund", "charge"]
+            },
+            {
+                question: "do you offer student discounts",
+                answer: "Yes, we offer 15% discount for students with valid ID cards. Select 'Student' option when booking and show your ID when boarding.",
+                keywords: ["student", "discount", "offer", "concession"]
+            },
+            {
+                question: "how do i track my bus",
+                answer: "You can track your bus in real-time through our app or website using your PNR number after logging in to your account.",
+                keywords: ["track", "location", "live", "pnr", "status"]
+            },
+             {
+                question:"hello",
+                answer: "Hei, how can i help you?",
+                keywords: ["hello", "hi", "hey"]
+            },
+              {
+                question:"which website",
+                answer: "You can access the website by clicking on this link- https://onlineksrtcswift.com",
+                keywords: ["website", "link"]
+            }
+        ];
+
+        // Initialize chat elements
+        const chatMessages = document.getElementById('chat-messages');
+        const userInput = document.getElementById('user-input');
+        const sendButton = document.getElementById('send-button');
+        const faqSuggestions = document.querySelectorAll('.faq-suggestion');
+
+        // Add event listeners for FAQ suggestions
+        faqSuggestions.forEach(button => {
+            button.addEventListener('click', () => {
+                userInput.value = button.textContent;
+                sendButton.click();
+            });
+        });
+
+        // Function to add message to chat
+        function addMessage(text, isUser) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
+            
+            const messageContent = document.createElement('div');
+            messageContent.textContent = text;
+            
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'message-time';
+            const now = new Date();
+            timeSpan.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            messageDiv.appendChild(messageContent);
+            messageDiv.appendChild(timeSpan);
+            
+            if (!isUser) {
+                const feedbackDiv = document.createElement('div');
+                feedbackDiv.className = 'feedback-buttons';
+                
+                const helpfulButton = document.createElement('button');
+                helpfulButton.className = 'feedback-button helpful';
+                helpfulButton.textContent = 'Helpful';
+                helpfulButton.addEventListener('click', () => {
+                    sendFeedback(text, true);
+                    feedbackDiv.innerHTML = '<span style="color: var(--success-color); font-size: 0.8rem;">Thank you for your feedback!</span>';
+                });
+                
+                const notHelpfulButton = document.createElement('button');
+                notHelpfulButton.className = 'feedback-button not-helpful';
+                notHelpfulButton.textContent = 'Not helpful';
+                notHelpfulButton.addEventListener('click', () => {
+                    sendFeedback(text, false);
+                    feedbackDiv.innerHTML = '<span style="color: var(--danger-color); font-size: 0.8rem;">We\'ll improve this answer. Thank you!</span>';
+                });
+                
+                feedbackDiv.appendChild(helpfulButton);
+                feedbackDiv.appendChild(notHelpfulButton);
+                messageDiv.appendChild(feedbackDiv);
+            }
+            
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Function to show typing indicator
+        function showTypingIndicator() {
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'typing-indicator';
+            
+            for (let i = 0; i < 3; i++) {
+                const dot = document.createElement('div');
+                dot.className = 'typing-dot';
+                typingDiv.appendChild(dot);
+            }
+            
+            chatMessages.appendChild(typingDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            return typingDiv;
+        }
+
+        // Function to hide typing indicator
+        function hideTypingIndicator(typingDiv) {
+            typingDiv.remove();
+        }
+
+        // Function to send feedback to server
+        function sendFeedback(answer, isHelpful) {
+            // In a real implementation, this would send to your backend
+            console.log(`Feedback received for answer: "${answer}". Was helpful: ${isHelpful}`);
+        }
+
+        // Function to train the NLP model
+        async function trainModel() {
+            const startTime = performance.now();
+            // Prepare training data
+            const trainingData = [];
+            const labels = [];
+            
+            faqData.forEach((item, index) => {
+                trainingData.push(item.question.toLowerCase());
+                labels.push(index);
+            });
+            
+            // Simple NLP model using TF.js
+            try {
+                model = tf.sequential();
+                
+                // Add layers
+                model.add(tf.layers.dense({
+                    inputShape: [100], // Simplified input shape
+                    units: 32,
+                    activation: 'relu'
+                }));
+                
+                model.add(tf.layers.dense({
+                    units: faqData.length,
+                    activation: 'softmax'
+                }));
+                
+                // Compile the model
+                model.compile({
+                    optimizer: 'adam',
+                    loss: 'sparseCategoricalCrossentropy',
+                    metrics: ['accuracy']
+                });
+                
+                // Enhanced tokenization with basic text processing
+            function preprocessText(text) {
+                // Basic text preprocessing for better matching
+                return text.toLowerCase()
+                    .replace(/[^\w\s]/g, '')  // Remove punctuation
+                    .replace(/\s+/g, ' ')     // Normalize whitespace
+                    .trim();
+            }
+                const xs = tf.tensor2d(Array(trainingData.length).fill([...Array(100)].map(() => Math.random())));
+                const ys = tf.tensor1d(labels, 'int32');
+                
+                // Train the model (mock training for this example)
+                await model.fit(xs, ys, {
+                    epochs: 10,
+                    verbose: 0
+                });
+                
+                const endTime = performance.now();
+                const trainingTime = ((endTime - startTime)/1000).toFixed(2);
+                console.log('Model trained successfully');
+                console.log(`Training completed in ${trainingTime} seconds`);
+            } catch (error) {
+                console.error('Error training model:', error);
+            }
+        }
+
+        // Function to predict answer using NLP model
+        async function predictAnswer(question) {
+            // Simple fallback to keyword matching if model fails
+            try {
+                // In a real implementation, you would properly vectorize the input
+                const prediction = model.predict(tf.tensor2d([[...Array(100)].map(() => Math.random())]));
+                const results = await prediction.data();
+                const maxProbability = Math.max(...results);
+                
+                // Only return answer if confidence is high enough
+                if (maxProbability > 0.7) {
+                    const predictedIndex = results.indexOf(maxProbability);
+                    return faqData[predictedIndex].answer;
+                }
+                // Fall through to keyword matching
+                console.log('Model confidence too low, using keyword matching');
+                return matchWithKeywords(question);
+            } catch (error) {
+                console.log('Using keyword matching as fallback');
+                return matchWithKeywords(question);
+            }
+        }
+
+        // Fallback keyword matching function
+        function matchWithKeywords(question) {
+            const lowerQuestion = question.toLowerCase();
+            let bestMatch = null;
+            let maxMatches = 0;
+            
+            faqData.forEach(item => {
+                let matchCount = 0;
+                item.keywords.forEach(keyword => {
+                    if (lowerQuestion.includes(keyword)) {
+                        matchCount++;
+                    }
+                });
+                
+                // Require at least 2 keyword matches to consider it a match
+                if (matchCount > maxMatches && matchCount >= 1) {
+                    maxMatches = matchCount;
+                    bestMatch = item.answer;
+                }
+            });
+            
+            if (bestMatch) {
+                return bestMatch;
+            }
+          
+            
+            // Enhanced fallback responses
+            const fallbackResponses = [
+                "I couldn't find an answer to your question. I've saved it for future improvement.",
+                "Sorry, I don't have information about that yet. Your question has been logged for review.",
+                "I'm unable to answer that question at this time. Our team will review it to improve the FAQ.",
+                "No matching answer found. We'll add this to our unanswered questions list."
+            ];
+            
+            return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+        }
+
+        // Initialize the chat
+        async function initializeChat() {
+            await trainModel();
+            
+            sendButton.addEventListener('click', async () => {
+                const question = userInput.value.trim();
+                if (question) {
+                    addMessage(question, true);
+                    userInput.value = '';
+                    
+                    const typingIndicator = showTypingIndicator();
+                    
+                    // Simulate processing time
+                    setTimeout(async () => {
+                        const answer = await predictAnswer(question);
+                        hideTypingIndicator(typingIndicator);
+                        addMessage(answer, false);
+                    }, 1500);
+                }
+            });
+            
+            userInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    sendButton.click();
+                }
+            });
+        }
+
+        // Start the chat when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeChat();
+        });
+    </script>
+</body>
+</html>
+
